@@ -1,0 +1,35 @@
+# Entorno Virtual
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Base de datos
+lspd.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Uploads temporales
+uploads/*
+!uploads/.gitkeep
+uploads/denuncias/*
+!uploads/denuncias/.gitkeep
+uploads/investigaciones/*
+!uploads/investigaciones/.gitkeep
+uploads/public/*
+!uploads/public/.gitkeep
+
+# Archivos de sistema
+.env
+.env.local
+
+# Logs
+*.log
