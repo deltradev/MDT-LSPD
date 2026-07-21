@@ -1,222 +1,179 @@
-# LSPD CMS — Portal Público Civil + MDT Interna
+# LSPD CMS — Versión PHP + MySQL (para ByetHost)
 
-Aplicación Flask completa con dos portales:
-
-1. **Portal Público Civil** (`/`) — accesible sin login para cualquier ciudadano.
-2. **MDT Interna LSPD** (`/mdt`) — accesible solo para personal LSPD autenticado.
-3. **Panel de Administración** (`/admin/panel`) — solo para `Jefe` y `AdminWeb`.
-
-Todo con CMS: noticias, categorías, estados y textos de ambos portales son editables desde el panel de administración sin tocar código.
+Portal Público Civil + MDT Interna LSPD + Panel de Administración, reescrito en **PHP puro + MySQL** para poder alojarse en hosting gratuito tipo ByetHost (que no soporta Python/Flask).
 
 ---
 
-## 🚀 Instalación
+## ⚠️ Aviso importante sobre esta versión
 
-### En un PC (Linux/Mac/Windows)
+Esta reescritura se hizo **sin poder ejecutar PHP** en el entorno donde se generó (no había intérprete de PHP ni acceso a internet para instalar uno). Se revisó manualmente con mucho cuidado — balance de llaves/paréntesis en los 79 archivos, cada `require` verificado contra el archivo real, cada consulta SQL preparada contra la cantidad de parámetros que recibe — pero **no reemplaza probarlo en un entorno real**.
 
-```bash
-# 1. Crear entorno virtual (recomendado)
-python3 -m venv venv
-source venv/bin/activate        # En Windows: venv\Scripts\activate
+**Antes de subir esto a ByetHost, probalo localmente.** Es rápido:
 
-# 2. Instalar dependencias
-pip install -r requirements.txt
+### Prueba local rápida (XAMPP / MAMP / Laragon)
 
-# 3. Ejecutar la aplicación
-python app.py
-```
+1. Instalá [XAMPP](https://www.apachefriends.org/) (Windows/Linux) o [MAMP](https://www.mamp.info/) (Mac).
+2. Copiá la carpeta completa `lspd-php/` dentro de `htdocs/` (XAMPP) o `htdocs/` (MAMP).
+3. Iniciá Apache y MySQL desde el panel de XAMPP/MAMP.
+4. Entrá a `http://localhost/phpmyadmin`, creá una base de datos (ej. `lspd`), y en la pestaña "Importar" subí `schema.sql`.
+5. Editá `config.php`: poné `DB_HOST = 'localhost'`, `DB_NAME = 'lspd'`, `DB_USER = 'root'`, `DB_PASS = ''` (contraseña vacía es el default de XAMPP).
+6. Visitá `http://localhost/lspd-php/install.php` una vez (crea el usuario admin).
+7. Borrá `install.php`.
+8. Entrá a `http://localhost/lspd-php/public/index.php` y probá todo el sitio: registro, login, crear una denuncia, el panel admin, etc.
 
-### 📱 En Termux (Android)
-
-La app es 100% compatible con Termux: no usa `bcrypt` (requiere compilar con Rust y suele fallar en Termux); en su lugar usa `werkzeug.security`, que es Python puro y no necesita compilación.
-
-```bash
-# 1. Actualizar Termux e instalar Python
-pkg update && pkg upgrade -y
-pkg install python -y
-
-# 2. (Opcional) descomprimir el proyecto si lo pasaste como .zip
-#    pkg install unzip -y  &&  unzip lspd-cms.zip  &&  cd lspd-cms
-cd lspd-cms
-
-# 3. Actualizar pip e instalar dependencias
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# 4. Ejecutar la aplicación
-python app.py
-```
-
-La app queda escuchando en `http://127.0.0.1:5000` (y también en `0.0.0.0:5000`).
-Abre ese enlace desde el navegador del propio teléfono (Chrome, Firefox, etc.) mientras Termux siga corriendo en segundo plano.
-
-**Notas para Termux:**
-- No necesitas `termux-setup-storage` a menos que quieras copiar el `.db` o los archivos subidos fuera de la carpeta del proyecto.
-- Si `pip install reportlab` se ve lento, es normal la primera vez: descarga e instala el paquete puro-Python, no requiere compilar nada.
-- Para mantener el servidor corriendo aunque bloquees la pantalla, activa la "wake lock" de Termux (menú deslizable desde el borde izquierdo → Acquire wakelock), o usa `termux-wake-lock` desde otra sesión.
-- Para acceder desde otro dispositivo de tu misma red (no solo el propio teléfono), usa la IP local del teléfono en vez de `127.0.0.1`, por ejemplo `http://192.168.x.x:5000` (puedes ver la IP con `ip addr` o `ifconfig` si tienes `pkg install net-tools`).
+Si algo falla ahí, es mucho más fácil de diagnosticar en tu máquina que a ciegas en ByetHost. Una vez que ande bien local, subí los mismos archivos a ByetHost.
 
 ---
 
-## 🔑 Usuario inicial
+## 🚀 Despliegue en ByetHost
 
-| Placa | Contraseña | Rol      |
-|-------|------------|----------|
-| 9999  | admin123   | AdminWeb |
+### 1. Crear la cuenta y el sitio
 
-Con este usuario puedes entrar directamente a `/mdt` y a `/admin/panel` para configurar el resto del sistema (crear más usuarios LSPD, categorías, etc.).
+1. Registrate en [byet.host](https://byet.host) y creá tu sitio (te da un subdominio gratis tipo `tunombre.byethost7.com`, o podés apuntar tu propio dominio).
+2. Esperá a que la cuenta se active (a veces tarda unos minutos/horas).
 
-**Importante:** cambia esta contraseña en producción desde `/admin/usuarios`.
+### 2. Crear la base de datos MySQL
 
----
+1. Entrá al **vPanel/cPanel** de ByetHost → sección **MySQL Databases**.
+2. Creá una base de datos (ByetHost le agrega un prefijo automático, tipo `b7_12345678_lspd`).
+3. Creá un usuario MySQL y asignale **todos los permisos** sobre esa base.
+4. Anotá los 4 datos: host (casi siempre `localhost`), nombre de la base, usuario, contraseña.
 
-## 👥 Roles del sistema
+### 3. Importar el esquema
 
-- **Civil** — rol por defecto al registrarse. Solo accede al portal público (`/`). Si intenta entrar a `/mdt` recibe un error **403**.
-- **Cadete, Oficial, Sargento, Teniente, Capitán, Jefe, AdminWeb** — roles LSPD. Todos pueden entrar a `/mdt`.
-- **Jefe** y **AdminWeb** — además tienen acceso al panel `/admin/panel`.
+1. Desde el panel, abrí **phpMyAdmin**.
+2. Seleccioná tu base de datos → pestaña **Importar** → subí el archivo `schema.sql` de este proyecto.
+3. Esto crea todas las tablas y siembra categorías/estados/configuración por defecto (el usuario admin se crea aparte, ver paso 5).
 
-Un Civil puede convertirse en Cadete si postula desde `/postulaciones` y un administrador aprueba su postulación desde `/admin/postulaciones`.
+**¿Ya tenías el sistema instalado de antes?** Si tu base de datos ya existía antes del sistema mejorado de licencias de armas, no reimportes `schema.sql` entero (fallaría por tablas duplicadas) — en su lugar, importá `migracion_armas.sql`, que solo agrega lo nuevo (columnas de licencia, tabla de historial, estados "Cedida"/"Retirada") sin tocar tus datos existentes. Instalaciones nuevas no necesitan este paso, ya viene incluido en `schema.sql`.
+
+### 4. Subir los archivos
+
+1. Comprimí el contenido de la carpeta `lspd-php/` (todo lo que está DENTRO, no la carpeta en sí).
+2. Subilo por **File Manager** del panel (botón "Upload", después "Extract") a la carpeta `htdocs/` o `public_html/` de tu cuenta (el nombre exacto varía; ByetHost normalmente usa `htdocs/`).
+3. Alternativa: subí por FTP (te dan los datos de FTP en el panel) usando FileZilla.
+
+### 5. Configurar y terminar la instalación
+
+1. Editá `config.php` (por File Manager, botón "Edit", o re-subiendo el archivo ya editado) con los 4 datos de MySQL del paso 2.
+2. Visitá `https://tudominio.com/install.php` **una sola vez** — esto crea el usuario administrador inicial.
+3. **Borrá `install.php` del servidor** apenas termine (ya cumplió su función; dejarlo es un riesgo de seguridad).
+4. Entrá a `https://tudominio.com/public/index.php` — ese es el portal público. El MDT está en `/mdt/dashboard.php` (pedirá login).
+
+### 6. Usuario inicial
+
+| Placa | Contraseña |
+|-------|------------|
+| 9999  | admin123   |
+
+**Cambiala inmediatamente** desde `/admin/usuarios.php` una vez que entres.
 
 ---
 
 ## 🗂️ Estructura del proyecto
 
 ```
-lspd-cms/
-├── app.py                  # Rutas, lógica de negocio, decoradores de rol
-├── database.py              # Creación de tablas + datos semilla (multi-archivo)
-├── requirements.txt
-├── README.md
-├── db/                       # Se genera automáticamente — 1 archivo .db por dominio
-│   ├── usuarios.db           # usuarios (login, roles, personal)
-│   ├── denuncias.db          # denuncias + archivos_denuncia
-│   ├── personas.db           # base de datos criminal (personas)
-│   ├── bandas.db             # base de datos criminal (bandas)
-│   ├── investigaciones.db    # investigaciones + notas_investigacion
-│   ├── multas.db             # multas
-│   ├── armas.db              # registro de armas
-│   ├── arrestos.db           # arrestos / detenciones
-│   ├── interno.db            # ascensos, certificaciones, asuntos internos, chat
-│   └── sistema.db            # configuración, categorías, estados, logs, noticias, contactos, postulaciones
-├── uploads/
-│   ├── denuncias/<id>/      # Adjuntos de denuncias LSPD
-│   ├── investigaciones/<id>/# Adjuntos de investigaciones y fotos BD criminal
-│   └── public/<id>/         # CVs de postulaciones
+lspd-php/
+├── config.php              # ÚNICO archivo que tenés que editar (datos de MySQL)
+├── install.php              # Visitar 1 sola vez, después BORRAR
+├── schema.sql                # Importar en phpMyAdmin antes de todo (instalación nueva)
+├── migracion_armas.sql        # Importar SOLO si ya tenías el sistema instalado antes
+├── descargar.php             # Sirve archivos de uploads/ con control de acceso
+├── .htaccess                 # Cabeceras de seguridad + páginas de error
+├── includes/
+│   ├── bootstrap.php         # Incluido al inicio de cada página (config+auth+CSRF)
+│   ├── db.php                 # Conexión PDO a MySQL
+│   ├── auth.php                # Sesión, roles, CSRF, rate-limiting
+│   ├── functions.php           # Helpers (config, uploads, logs, Turnstile)
+│   ├── simplepdf.php            # Generador de PDF sin dependencias externas
+│   ├── layout_public_top/bottom.php  # Layout del portal civil (tema claro)
+│   ├── layout_mdt_top/bottom.php     # Layout del MDT (tema oscuro)
+│   ├── layout_admin_top/bottom.php   # Layout del panel admin
+│   └── .htaccess              # Bloquea acceso directo por navegador
+├── public/    → Portal civil: index, login, registro, postulaciones, denuncias, se_busca, contacto
+├── mdt/       → MDT interna: dashboard, denuncias, personas, bandas, investigaciones,
+│                multas, armas, arrestos, asuntos internos, personal, chat, estadísticas
+├── admin/     → Panel admin: usuarios, categorías, estados, config, postulaciones, logs, backup
 ├── static/
-│   ├── css/style.css        # Tema oscuro (MDT + Admin)
-│   ├── css/public.css       # Tema claro (Portal Civil)
-│   └── js/main.js
-└── templates/
-    ├── public/               # Vistas del portal civil
-    ├── mdt/                  # Vistas de la MDT interna
-    └── admin/                # Vistas del panel de administración
+│   ├── css/public.css        # Tema claro (portal civil)
+│   └── css/style.css         # Tema oscuro (MDT + admin)
+└── uploads/
+    ├── denuncias/<id>/       # Adjuntos de denuncias
+    ├── investigaciones/<id>/ # Adjuntos de investigaciones y fotos BD criminal
+    ├── public/                # (reservado)
+    └── .htaccess              # Impide ejecutar scripts subidos como si fueran PHP
 ```
 
-### 🔀 Sobre la separación en varios archivos .db
+---
 
-Cada tipo de dato que se registra en la app se guarda en su propio archivo SQLite físico dentro de `db/` (por ejemplo, toda denuncia creada queda en `db/denuncias.db`, toda persona de la base criminal en `db/personas.db`, etc.). Internamente, `database.py` conecta todos esos archivos a la vez usando `ATTACH DATABASE`, así que las consultas (incluyendo los `JOIN` entre, por ejemplo, una denuncia y el oficial que la creó) siguen funcionando con normalidad aunque los datos vivan en archivos distintos.
+## 🔫 Registro de Armas y Licencias
 
-**Nota técnica:** SQLite permite adjuntar como máximo 10 bases de datos por conexión. Como el sistema ya tiene más de 10 dominios de datos, los de menor volumen/registro directo (ascensos, certificaciones, asuntos internos, chat interno, categorías, estados, configuración, logs, noticias, contactos y postulaciones) se agrupan en dos archivos de soporte (`interno.db` y `sistema.db`), mientras que los que el usuario carga con más frecuencia (denuncias, arrestos, bandas, personas, armas, multas, investigaciones, usuarios) tienen cada uno su propio archivo dedicado.
+El módulo de armas (`/mdt/armas.php`) funciona como un registro de licencias en regla, no solo una lista de objetos:
+
+- **Datos completos del arma**: tipo (permiso civil / incautada), categoría (Pistola, Revólver, Rifle, Escopeta, Subfusil, Otro), marca, modelo, número de serie, calibre, color, país de origen.
+- **Datos de la licencia**: número de permiso, fecha de emisión, fecha de vencimiento (el listado marca automáticamente con un badge "Vencida" las licencias activas que ya pasaron su fecha), titular actual.
+- **Ceder** (`mdt/armas_ceder.php`): transfiere la titularidad a otra persona registrada en la base criminal. El arma pasa a estado "Cedida" y queda un registro permanente de quién la tenía antes y quién la recibe.
+- **Dar de baja** (`mdt/armas_baja.php`): retira definitivamente la licencia (por revocación, entrega voluntaria, destrucción, etc.), pidiendo motivo obligatorio, y queda guardada la fecha y el oficial que la dio de baja.
+- **Historial completo** (visible en la ficha de detalle, `mdt/armas_ver.php`): cada evento — alta, cesión, baja — queda registrado con fecha, oficial responsable y de/hacia quién, para tener trazabilidad total de la licencia a lo largo del tiempo.
+- **Certificado en PDF**: cada arma/licencia tiene un botón para descargar un certificado oficial con todos sus datos.
 
 ---
 
-## 🧩 Módulos principales
+## 🔀 Diferencias clave respecto a la versión Flask/Python
 
-### Portal Público (`/`)
+| Aspecto | Versión Flask (Python) | Esta versión (PHP) |
+|---|---|---|
+| Base de datos | 10 archivos SQLite separados | **1 sola base MySQL** (limitación de las cuentas gratuitas de ByetHost, que solo permiten 1 base) |
+| Hash de contraseñas | `werkzeug.security` | `password_hash()` nativo de PHP (bcrypt) |
+| Rate limiting | Diccionario en memoria del proceso | Tabla `rate_limit_hits` en MySQL (cada request PHP es un proceso nuevo, no hay memoria compartida) |
+| PDF | ReportLab | Generador propio minimalista (sin librerías externas — ver nota abajo) |
+| CSRF | Flask-session + JS de auto-inyección | Sesión PHP nativa + campo oculto explícito en cada formulario |
+| Backup | Copia de los .db + zip | Export SQL generado por PHP (no requiere mysqldump/SSH) |
+| Servidor | `python app.py` (proceso propio) | Apache + PHP de ByetHost (sin proceso propio que mantener) |
 
-- **Inicio**: noticias/anuncios editables desde `/admin/config/public`.
-- **Postulaciones** (`/postulaciones`): embebe un **Google Form** externo (configurable desde `/admin/config/public`). El AdminWeb/Jefe puede **abrir o cerrar** las postulaciones con un interruptor, y pegar/cambiar el enlace del formulario en cualquier momento. Ya no se almacenan datos localmente: las respuestas quedan en Google Forms/Sheets. La página vieja de `/admin/postulaciones` sigue disponible para consultas manuales o históricas.
-- **Denuncias Ciudadanas** (`/denuncias`): un civil puede denunciar y adjuntar evidencia; si está logueado ve su propio historial.
-- **Se Busca** (`/se-busca`): lista personas y bandas marcadas como `es_publico = 1` desde la MDT.
-- **Contacto** (`/contacto`).
-- **Login / Registro** (`/login`, `/registro`): el registro siempre crea el rol `Civil`.
+### Sobre el generador de PDF
 
-### MDT Interna (`/mdt`) — requiere rol LSPD
-- **Dashboard**: métricas generales, últimas denuncias, BOLOs activos.
-- **Denuncias**: CRUD completo, subida de archivos, generación de PDF con ReportLab, categorías dinámicas.
-- **Base de Datos Criminal**: CRUD de Personas y Bandas, vínculo persona↔banda, marcador "Público" para BOLO.
-- **Investigaciones**: CRUD con notas cronológicas y archivos adjuntos por nota.
-- **Multas**: CRUD + generación de PDF de boleta oficial.
-- **BOLO** (`/mdt/bolo`): personas/bandas con nivel Alto/Extremo.
-- **Registro de Armas** (`/mdt/armas`): permisos civiles y armas incautadas, vinculables a una persona y/o a una denuncia.
-- **Arrestos / Detenciones** (`/mdt/arrestos`): registro independiente de las denuncias, con cargos, fianza y estado judicial (Detenido, Libertad Bajo Fianza, Condenado, etc.).
-- **Asuntos Internos** (`/mdt/asuntos-internos`) — **solo Jefe y AdminWeb**: reportes confidenciales contra oficiales, con estado y medida disciplinaria aplicada.
-- **Personal** (`/mdt/personal`): ficha de cada oficial con historial de ascensos (Jefe/AdminWeb pueden ascender de rango) y certificaciones/cursos (cualquier LSPD puede cargarlas).
-- **Chat Interno** (`/mdt/chat`): canal general (broadcast a todo el LSPD) + mensajes directos entre oficiales, con actualización automática cada 4 segundos (polling, sin necesidad de recargar la página).
-- **Estadísticas Automáticas** (`/mdt/estadisticas`): gráficos en tiempo real (Chart.js) calculados directamente desde la base de datos — denuncias por tipo/mes, investigaciones por estado, multas por mes y recaudación, arrestos por mes, personas por nivel de amenaza, y ranking de oficiales por denuncias registradas. No requiere carga manual de datos: se recalcula solo en cada visita.
-
-### Panel Admin (`/admin/panel`) — solo Jefe/AdminWeb
-- Gestión de usuarios (crear, editar, cambiar rol, desactivar, eliminar).
-- Gestión de categorías (denuncias, investigaciones, multas).
-- Gestión de estados (denuncia, investigación, postulación, multa).
-- Editor del Portal Civil (banner, nombre del departamento, footer, noticias).
-- Editor del MDT (título, color primario, texto del dashboard).
-- Gestión de postulaciones (aprobar → asciende Civil a Cadete / rechazar).
-- Ver logs de acciones del sistema.
-- Descargar backup de todas las bases de datos (un .zip con los 10 archivos .db de `db/`).
+No se usó FPDF/TCPDF (las librerías PHP más comunes para esto) porque no había forma de probar que la instalación/inclusión funcionara correctamente en este entorno sin PHP disponible. En su lugar, `includes/simplepdf.php` arma un PDF válido "a mano" (texto plano con Helvetica, sin imágenes ni tablas complejas) — suficiente para las constancias y boletas del sistema, y con cero dependencias que puedan fallar al subir a un hosting compartido.
 
 ---
 
-## 🔒 Ciberseguridad implementada
+## 🔒 Seguridad incluida
 
-Todo lo de acá está implementado en Python puro (sin librerías nuevas), para seguir siendo 100% compatible con Termux.
+- Contraseñas con `password_hash()` (bcrypt nativo de PHP).
+- CSRF: token de sesión validado en todo POST (`includes/auth.php` → `verificarCsrf()`).
+- Rate limiting en login/registro/contacto/denuncia pública/chat (tabla `rate_limit_hits`).
+- Bloqueo de cuenta tras 5 logins fallidos seguidos (15 minutos).
+- Cabeceras de seguridad HTTP (`X-Frame-Options`, `Content-Security-Policy`, etc.) vía PHP y `.htaccess`.
+- CAPTCHA opcional (Cloudflare Turnstile) en login/registro/contacto/denuncia — configurable en `config.php`.
+- `.htaccess` en `uploads/` impide que se ejecute cualquier script subido (aunque la validación de extensión ya lo impide en primer lugar).
+- `.htaccess` en `includes/` bloquea el acceso directo por navegador a los archivos internos.
+- Consultas SQL siempre parametrizadas (PDO prepared statements) — sin inyección SQL.
 
-- **Contraseñas hasheadas** con `werkzeug.security` (scrypt) — nunca en texto plano.
-- **Control de acceso por rol** (`@role_required`): un Civil que intenta `/mdt/*` o `/admin/*` recibe 403.
-- **Protección CSRF**: cada sesión tiene un token único; todo `POST/PUT/PATCH/DELETE` sin el token correcto se rechaza con 400. El token se inyecta solo en cada `<form>` automáticamente vía `static/js/csrf.js` — no hace falta tocar las plantillas para que un formulario nuevo quede protegido.
-- **Rate limiting** en endpoints sensibles (`/login`, `/registro`, `/contacto`, `/denuncias`, `/mdt/chat/enviar`): un límite de intentos por minuto por IP, para frenar bots y ataques de fuerza bruta/spam automatizado.
-- **Bloqueo de cuenta por fuerza bruta**: tras 5 intentos de login fallidos seguidos, la cuenta se bloquea 15 minutos (aunque después se use la contraseña correcta).
-- **Cabeceras de seguridad HTTP** en toda respuesta: `X-Frame-Options` (anti clickjacking), `X-Content-Type-Options: nosniff`, `Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy`, y `Strict-Transport-Security` cuando corre bajo HTTPS.
-- **Cookies de sesión endurecidas**: `HttpOnly` (no accesibles desde JS), `SameSite=Lax` (mitiga CSRF cross-site), y `Secure` automático si corre bajo HTTPS.
-- **Modo debug apagado por defecto**: antes quedaba `debug=True` fijo, lo cual expone una consola interactiva que permite ejecutar código en el servidor ante cualquier error — ahora requiere `FLASK_DEBUG=1` explícito para activarse.
-- **Subida de archivos validada**: extensión controlada (`ALLOWED_EXT`), nombre sanitizado (`secure_filename`), tamaño máximo de 16 MB.
-- **Consultas parametrizadas** en toda la app (nunca se arma SQL concatenando texto del usuario) → sin inyección SQL.
-- **Auditoría**: intentos de login fallidos, bloqueos y abusos de rate limit quedan registrados en `/admin/logs`.
+### Cloudflare Turnstile (CAPTCHA) — opcional
 
-### Variables de entorno para producción
+Sacá tus claves gratis en [dash.cloudflare.com](https://dash.cloudflare.com) → Turnstile → "Add a site", y pegalas en `config.php`:
 
-| Variable | Efecto |
-|---|---|
-| `LSPD_SECRET_KEY` | Clave secreta de Flask (¡cambiala! sin esto usa una de ejemplo). |
-| `FLASK_DEBUG=1` | Activa el modo debug (NUNCA en producción/expuesto a internet). |
-| `FORCE_HTTPS=1` | Activa cookies `Secure` y la cabecera HSTS (usalo si tenés HTTPS real, por ejemplo detrás de Cloudflare). |
-| `PORT` | Puerto en el que escucha (default 5000). |
+```php
+define('TURNSTILE_SITE_KEY', 'tu_site_key');
+define('TURNSTILE_SECRET_KEY', 'tu_secret_key');
+```
+
+Si las dejás vacías (`''`), el CAPTCHA simplemente no aparece — el sitio funciona igual.
 
 ---
 
-## ☁️ Cloudflare como capa adicional (recomendado)
+## 👥 Roles del sistema
 
-Cloudflare **sí sirve** y es un excelente complemento: protege cosas que la app por sí sola no puede (ataques DDoS volumétricos, filtrado de bots a nivel de red, certificado SSL/TLS gratis). Lo que implementé arriba protege lo que Cloudflare no ve (CSRF, fuerza bruta de cuentas específicas, cabeceras de la respuesta). Usados juntos se complementan.
-
-**Cómo activarlo** (necesitás un dominio propio apuntando a tu servidor):
-1. Creá una cuenta gratis en cloudflare.com y agregá tu dominio.
-2. Cloudflare te da 2 nameservers — cambialos en tu proveedor de dominio (GoDaddy, Namecheap, etc.) por esos.
-3. En el panel de Cloudflare, creá un registro DNS tipo `A` apuntando a la IP pública de tu servidor, con el ícono de nube **naranja** (activado = tráfico pasa por Cloudflare, no directo).
-4. En **SSL/TLS**, elegí modo **"Full"** o **"Full (strict)"** si tu servidor también tiene su propio certificado.
-5. Activá **"Bot Fight Mode"** (gratis) en Security → Bots.
-6. Creá una regla de **Rate Limiting** (Security → WAF → Rate limiting rules) para `/login`, `/registro`, etc. — es una segunda capa además de la que ya tiene la app, y esta sí es global (no por proceso).
-7. Si sufrís un ataque activo, **"Under Attack Mode"** (Overview → botón naranja) pone un desafío JS a todos los visitantes temporalmente.
-
-**Importante:** la app ya viene configurada con `ProxyFix` para reconocer la IP real del visitante cuando pasa por un proxy como Cloudflare (si no hicieras esto, el rate-limiting y los logs verían siempre la IP de Cloudflare en vez de la del atacante/usuario real).
+- **Civil** — rol por defecto al registrarse. Solo ve el portal público. Si intenta entrar a `/mdt/` o `/admin/` recibe **403**.
+- **Cadete, Oficial, Sargento, Teniente, Capitán, Jefe, AdminWeb** — roles LSPD, todos acceden al MDT.
+- **Jefe** y **AdminWeb** — además acceden al panel de administración y a Asuntos Internos.
 
 ---
 
-## 📄 Generación de PDF
+## 🧩 Notas para producción en ByetHost
 
-Se usa **ReportLab** para generar:
-- Constancia oficial de denuncia (`/mdt/denuncias/<id>/pdf`).
-- Boleta oficial de multa (`/mdt/multas/<id>/pdf`).
-
-Ambos documentos incluyen encabezado institucional LSPD, tabla de datos y fecha de generación.
-
----
-
-## ⚠️ Notas para producción
-
-- Cambia `app.config["SECRET_KEY"]` (o mejor, exportá `LSPD_SECRET_KEY`) por un valor aleatorio y secreto.
-- Cambia la contraseña del usuario `9999` inmediatamente.
-- Nunca actives `FLASK_DEBUG=1` en un servidor expuesto a internet.
-- Considera migrar de SQLite a PostgreSQL/MySQL si esperas alta concurrencia.
-- Ejecuta detrás de un servidor WSGI real (Gunicorn/uWSGI), no con el servidor de desarrollo de Flask.
-- Sumá Cloudflare (u otro WAF/CDN) por delante como capa adicional — ver sección de arriba.
+- **Zona horaria**: ajustá `date_default_timezone_set()` en `config.php` a tu país.
+- **Cron jobs**: ByetHost no suele dar cron en cuentas gratuitas — no hace falta, todo el sistema funciona por visitas normales a las páginas (el chat se actualiza solo vía JavaScript, sin necesitar tareas programadas).
+- **Backups**: descargalos regularmente desde `/admin/backup.php` (genera un `.sql`) y guardalos fuera del hosting.
+- **Límite de 1 base de datos**: si tu plan de ByetHost permite más de una base en el futuro, technically podrías separar tablas en varias bases (usando `nombre_base.tabla` en las consultas) — pero no es necesario, un solo MySQL maneja perfectamente este volumen de datos.
+- **HTTPS**: ByetHost ofrece SSL gratis (Let's Encrypt) desde el panel — activalo, y si querés forzar HTTPS agregá la regla correspondiente a tu `.htaccess`.
