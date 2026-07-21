@@ -75,6 +75,7 @@ Si algo falla ahí, es mucho más fácil de diagnosticar en tu máquina que a ci
 ```
 lspd-php/
 ├── config.php              # ÚNICO archivo que tenés que editar (datos de MySQL)
+├── index.php                 # Redirige la raíz del sitio a public/index.php
 ├── install.php              # Visitar 1 sola vez, después BORRAR
 ├── schema.sql                # Importar en phpMyAdmin antes de todo (instalación nueva)
 ├── migracion_armas.sql        # Importar SOLO si ya tenías el sistema instalado antes
@@ -177,3 +178,21 @@ Si las dejás vacías (`''`), el CAPTCHA simplemente no aparece — el sitio fun
 - **Backups**: descargalos regularmente desde `/admin/backup.php` (genera un `.sql`) y guardalos fuera del hosting.
 - **Límite de 1 base de datos**: si tu plan de ByetHost permite más de una base en el futuro, technically podrías separar tablas en varias bases (usando `nombre_base.tabla` en las consultas) — pero no es necesario, un solo MySQL maneja perfectamente este volumen de datos.
 - **HTTPS**: ByetHost ofrece SSL gratis (Let's Encrypt) desde el panel — activalo, y si querés forzar HTTPS agregá la regla correspondiente a tu `.htaccess`.
+
+---
+
+## 🛠️ Solución de problemas comunes
+
+### Error 403 al entrar a tu dominio
+
+Causa: no había ningún `index.php` en la raíz del sitio, y el `.htaccess` tiene `Options -Indexes` (bloquea el listado de carpetas) — al no encontrar qué mostrar, Apache devuelve 403 en vez de la página. **Ya está solucionado**: el proyecto incluye un `index.php` en la raíz que redirige automáticamente a `public/index.php`. Si ya habías subido una versión anterior sin este archivo, solo hace falta subir el `index.php` nuevo a la raíz (junto a `config.php`).
+
+Si el 403 persiste después de subirlo, revisá:
+- Que `index.php` haya quedado en la raíz de `htdocs/`/`public_html/` (no dentro de una subcarpeta).
+- Los permisos de archivos/carpetas por FTP: carpetas en `755`, archivos en `644` (ByetHost a veces es estricto con esto).
+- Si tu Apache no soporta la sintaxis `Require all denied` (Apache 2.4), vas a ver error 500 en vez de 403 al entrar a `includes/` — en ese caso, abrí `includes/.htaccess` y cambiá esa línea por la alternativa comentada (`Deny from all`, sintaxis de Apache 2.2) que ya está incluida como referencia en el mismo archivo.
+
+### Una carpeta no se sube (por ejemplo `static/js`)
+
+Los clientes FTP y algunos administradores de archivos (incluido el de ByetHost) no suben carpetas completamente vacías. `static/js/` no tiene ningún archivo real (todo el JavaScript del sistema vive dentro de cada página `.php`, no en archivos `.js` separados) — no afecta el funcionamiento del sitio si no se sube. El proyecto incluye un archivo `.gitkeep` dentro para que la carpeta viaje igual en el `.zip`, pero si tu herramienta de subida la sigue salteando, no pasa nada: podés crearla vacía a mano en el servidor o simplemente ignorarla.
+
