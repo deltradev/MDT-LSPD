@@ -4,6 +4,20 @@ Portal Público Civil + MDT Interna LSPD + Panel de Administración, reescrito e
 
 ---
 
+## 🆕 Últimos cambios
+
+**Bugs corregidos:**
+- **`admin/config.php` daba 403 en ambas secciones (Portal Civil y MDT)**: el archivo de credenciales de la raíz se llamaba igual (`config.php`) que el editor del panel, y la regla de Apache que protege al primero bloqueaba por nombre de archivo **en todo el sitio**, sin importar la carpeta. El archivo de credenciales ahora se llama **`app_config.php`** (si ya lo habías subido, subí la carpeta de nuevo completa).
+- **`mdt/chat.php` daba 403**: se sospecha que el hosting bloquea por seguridad cualquier URL que contenga la palabra "chat" (común en hosts gratuitos, por su asociación histórica con webshells maliciosos). Se renombró todo el módulo a **`mdt/mensajeria.php`** (+ `mensajeria_enviar.php` y `mensajeria_datos.php`) para evitar el bloqueo.
+- **Las fotos de personas/bandas no se veían**: se subían bien, pero ningún template las mostraba (solo un ícono genérico). Ahora se ven en el listado interno, en la ficha de edición, y en `/public/se_busca.php` (si la persona/banda está marcada como "Público"). También se corrigió `descargar.php`, que antes bloqueaba cualquier acceso sin login — ahora permite ver específicamente las fotos marcadas como públicas.
+
+**Función nueva:**
+- **Temporizador de condena en arrestos**: al crear o editar un arresto, podés indicarle una duración en minutos. Mientras corre, se ve un contador en vivo (horas/minutos/segundos). Al cumplirse el tiempo, el estado judicial pasa solo a **"Condena Cumplida"** — se revisa automáticamente cada vez que alguien abre el listado de arrestos o el dashboard (ByetHost no da cron en cuentas gratuitas, así que el chequeo se dispara con el tráfico normal en vez de un reloj en el servidor).
+
+Si ya tenías el sistema funcionando, mirá la sección **"Importar el esquema"** más abajo — hay 2 archivos de migración nuevos para aplicar sin perder tus datos.
+
+---
+
 ## ⚠️ Aviso importante sobre esta versión
 
 Esta reescritura se hizo **sin poder ejecutar PHP** en el entorno donde se generó (no había intérprete de PHP ni acceso a internet para instalar uno). Se revisó manualmente con mucho cuidado — balance de llaves/paréntesis en los 79 archivos, cada `require` verificado contra el archivo real, cada consulta SQL preparada contra la cantidad de parámetros que recibe — pero **no reemplaza probarlo en un entorno real**.
@@ -16,7 +30,7 @@ Esta reescritura se hizo **sin poder ejecutar PHP** en el entorno donde se gener
 2. Copiá la carpeta completa `lspd-php/` dentro de `htdocs/` (XAMPP) o `htdocs/` (MAMP).
 3. Iniciá Apache y MySQL desde el panel de XAMPP/MAMP.
 4. Entrá a `http://localhost/phpmyadmin`, creá una base de datos (ej. `lspd`), y en la pestaña "Importar" subí `schema.sql`.
-5. Editá `config.php`: poné `DB_HOST = 'localhost'`, `DB_NAME = 'lspd'`, `DB_USER = 'root'`, `DB_PASS = ''` (contraseña vacía es el default de XAMPP).
+5. Editá `app_config.php`: poné `DB_HOST = 'localhost'`, `DB_NAME = 'lspd'`, `DB_USER = 'root'`, `DB_PASS = ''` (contraseña vacía es el default de XAMPP).
 6. Visitá `http://localhost/lspd-php/install.php` una vez (crea el usuario admin).
 7. Borrá `install.php`.
 8. Entrá a `http://localhost/lspd-php/public/index.php` y probá todo el sitio: registro, login, crear una denuncia, el panel admin, etc.
@@ -45,7 +59,11 @@ Si algo falla ahí, es mucho más fácil de diagnosticar en tu máquina que a ci
 2. Seleccioná tu base de datos → pestaña **Importar** → subí el archivo `schema.sql` de este proyecto.
 3. Esto crea todas las tablas y siembra categorías/estados/configuración por defecto (el usuario admin se crea aparte, ver paso 5).
 
-**¿Ya tenías el sistema instalado de antes?** Si tu base de datos ya existía antes del sistema mejorado de licencias de armas, no reimportes `schema.sql` entero (fallaría por tablas duplicadas) — en su lugar, importá `migracion_armas.sql`, que solo agrega lo nuevo (columnas de licencia, tabla de historial, estados "Cedida"/"Retirada") sin tocar tus datos existentes. Instalaciones nuevas no necesitan este paso, ya viene incluido en `schema.sql`.
+**¿Ya tenías el sistema instalado de antes?** Si tu base de datos ya existía antes de estas mejoras, no reimportes `schema.sql` entero (fallaría por tablas duplicadas) — en su lugar, importá:
+- `migracion_armas.sql` → agrega el sistema de licencias de armas (columnas de licencia, historial, estados "Cedida"/"Retirada").
+- `migracion_arrestos.sql` → agrega el temporizador de condena a arrestos.
+
+Ambos son seguros de ejecutar más de una vez y no tocan tus datos existentes. Instalaciones nuevas no necesitan ninguno de los dos: ya vienen incluidos en `schema.sql`.
 
 ### 4. Subir los archivos
 
@@ -55,7 +73,7 @@ Si algo falla ahí, es mucho más fácil de diagnosticar en tu máquina que a ci
 
 ### 5. Configurar y terminar la instalación
 
-1. Editá `config.php` (por File Manager, botón "Edit", o re-subiendo el archivo ya editado) con los 4 datos de MySQL del paso 2.
+1. Editá `app_config.php` (por File Manager, botón "Edit", o re-subiendo el archivo ya editado) con los 4 datos de MySQL del paso 2.
 2. Visitá `https://tudominio.com/install.php` **una sola vez** — esto crea el usuario administrador inicial.
 3. **Borrá `install.php` del servidor** apenas termine (ya cumplió su función; dejarlo es un riesgo de seguridad).
 4. Entrá a `https://tudominio.com/public/index.php` — ese es el portal público. El MDT está en `/mdt/dashboard.php` (pedirá login).
@@ -74,11 +92,12 @@ Si algo falla ahí, es mucho más fácil de diagnosticar en tu máquina que a ci
 
 ```
 lspd-php/
-├── config.php              # ÚNICO archivo que tenés que editar (datos de MySQL)
+├── app_config.php              # ÚNICO archivo que tenés que editar (datos de MySQL)
 ├── index.php                 # Redirige la raíz del sitio a public/index.php
 ├── install.php              # Visitar 1 sola vez, después BORRAR
 ├── schema.sql                # Importar en phpMyAdmin antes de todo (instalación nueva)
 ├── migracion_armas.sql        # Importar SOLO si ya tenías el sistema instalado antes
+├── migracion_arrestos.sql     # Importar SOLO si ya tenías el sistema instalado antes
 ├── descargar.php             # Sirve archivos de uploads/ con control de acceso
 ├── .htaccess                 # Cabeceras de seguridad + páginas de error
 ├── includes/
@@ -93,14 +112,15 @@ lspd-php/
 │   └── .htaccess              # Bloquea acceso directo por navegador
 ├── public/    → Portal civil: index, login, registro, postulaciones, denuncias, se_busca, contacto
 ├── mdt/       → MDT interna: dashboard, denuncias, personas, bandas, investigaciones,
-│                multas, armas, arrestos, asuntos internos, personal, chat, estadísticas
+│                multas, armas, arrestos, asuntos internos, personal, mensajería, estadísticas
 ├── admin/     → Panel admin: usuarios, categorías, estados, config, postulaciones, logs, backup
 ├── static/
 │   ├── css/public.css        # Tema claro (portal civil)
 │   └── css/style.css         # Tema oscuro (MDT + admin)
 └── uploads/
     ├── denuncias/<id>/       # Adjuntos de denuncias
-    ├── investigaciones/<id>/ # Adjuntos de investigaciones y fotos BD criminal
+    ├── investigaciones/<id>/ # Adjuntos de investigaciones (notas)
+    ├── fotos_criminales/      # Fotos de personas y bandas de la base criminal
     ├── public/                # (reservado)
     └── .htaccess              # Impide ejecutar scripts subidos como si fueran PHP
 ```
@@ -117,6 +137,20 @@ El módulo de armas (`/mdt/armas.php`) funciona como un registro de licencias en
 - **Dar de baja** (`mdt/armas_baja.php`): retira definitivamente la licencia (por revocación, entrega voluntaria, destrucción, etc.), pidiendo motivo obligatorio, y queda guardada la fecha y el oficial que la dio de baja.
 - **Historial completo** (visible en la ficha de detalle, `mdt/armas_ver.php`): cada evento — alta, cesión, baja — queda registrado con fecha, oficial responsable y de/hacia quién, para tener trazabilidad total de la licencia a lo largo del tiempo.
 - **Certificado en PDF**: cada arma/licencia tiene un botón para descargar un certificado oficial con todos sus datos.
+
+---
+
+## ⏱️ Temporizador de Condena en Arrestos
+
+Al crear o editar un arresto (`mdt/arrestos_form.php`), el campo **"Duración de la condena (minutos)"** es opcional:
+
+- Si lo dejás vacío, el arresto funciona como antes (sin temporizador).
+- Si le ponés un número, arranca a correr desde el momento en que guardás. Se muestra un contador en vivo (horas/minutos/segundos) tanto en el listado de arrestos como en la ficha de edición.
+- Al cumplirse el tiempo, el **estado judicial pasa solo a "Condena Cumplida"**.
+- Si necesitás reiniciar el conteo (por ejemplo, tras una nueva infracción durante la condena), hay un checkbox "Reiniciar el temporizador desde ahora" al editar.
+
+**Cómo funciona sin cron:** ByetHost no da tareas programadas en cuentas gratuitas, así que no hay un "reloj" corriendo solo en el servidor. En cambio, cada vez que alguien abre el listado de arrestos o el dashboard, el sistema revisa con una consulta rápida si algún temporizador ya venció y lo actualiza en ese momento. En la práctica esto significa que el cambio a "Condena Cumplida" se aplica la próxima vez que cualquier oficial mira esa pantalla — no hace falta que sea el mismo que hizo el arresto, ni que la pantalla quede abierta esperando.
+
 
 ---
 
@@ -145,14 +179,14 @@ No se usó FPDF/TCPDF (las librerías PHP más comunes para esto) porque no hab�
 - Rate limiting en login/registro/contacto/denuncia pública/chat (tabla `rate_limit_hits`).
 - Bloqueo de cuenta tras 5 logins fallidos seguidos (15 minutos).
 - Cabeceras de seguridad HTTP (`X-Frame-Options`, `Content-Security-Policy`, etc.) vía PHP y `.htaccess`.
-- CAPTCHA opcional (Cloudflare Turnstile) en login/registro/contacto/denuncia — configurable en `config.php`.
+- CAPTCHA opcional (Cloudflare Turnstile) en login/registro/contacto/denuncia — configurable en `app_config.php`.
 - `.htaccess` en `uploads/` impide que se ejecute cualquier script subido (aunque la validación de extensión ya lo impide en primer lugar).
 - `.htaccess` en `includes/` bloquea el acceso directo por navegador a los archivos internos.
 - Consultas SQL siempre parametrizadas (PDO prepared statements) — sin inyección SQL.
 
 ### Cloudflare Turnstile (CAPTCHA) — opcional
 
-Sacá tus claves gratis en [dash.cloudflare.com](https://dash.cloudflare.com) → Turnstile → "Add a site", y pegalas en `config.php`:
+Sacá tus claves gratis en [dash.cloudflare.com](https://dash.cloudflare.com) → Turnstile → "Add a site", y pegalas en `app_config.php`:
 
 ```php
 define('TURNSTILE_SITE_KEY', 'tu_site_key');
@@ -173,7 +207,7 @@ Si las dejás vacías (`''`), el CAPTCHA simplemente no aparece — el sitio fun
 
 ## 🧩 Notas para producción en ByetHost
 
-- **Zona horaria**: ajustá `date_default_timezone_set()` en `config.php` a tu país.
+- **Zona horaria**: ajustá `date_default_timezone_set()` en `app_config.php` a tu país.
 - **Cron jobs**: ByetHost no suele dar cron en cuentas gratuitas — no hace falta, todo el sistema funciona por visitas normales a las páginas (el chat se actualiza solo vía JavaScript, sin necesitar tareas programadas).
 - **Backups**: descargalos regularmente desde `/admin/backup.php` (genera un `.sql`) y guardalos fuera del hosting.
 - **Límite de 1 base de datos**: si tu plan de ByetHost permite más de una base en el futuro, technically podrías separar tablas en varias bases (usando `nombre_base.tabla` en las consultas) — pero no es necesario, un solo MySQL maneja perfectamente este volumen de datos.
@@ -185,7 +219,7 @@ Si las dejás vacías (`''`), el CAPTCHA simplemente no aparece — el sitio fun
 
 ### Error 403 al entrar a tu dominio
 
-Causa: no había ningún `index.php` en la raíz del sitio, y el `.htaccess` tiene `Options -Indexes` (bloquea el listado de carpetas) — al no encontrar qué mostrar, Apache devuelve 403 en vez de la página. **Ya está solucionado**: el proyecto incluye un `index.php` en la raíz que redirige automáticamente a `public/index.php`. Si ya habías subido una versión anterior sin este archivo, solo hace falta subir el `index.php` nuevo a la raíz (junto a `config.php`).
+Causa: no había ningún `index.php` en la raíz del sitio, y el `.htaccess` tiene `Options -Indexes` (bloquea el listado de carpetas) — al no encontrar qué mostrar, Apache devuelve 403 en vez de la página. **Ya está solucionado**: el proyecto incluye un `index.php` en la raíz que redirige automáticamente a `public/index.php`. Si ya habías subido una versión anterior sin este archivo, solo hace falta subir el `index.php` nuevo a la raíz (junto a `app_config.php`).
 
 Si el 403 persiste después de subirlo, revisá:
 - Que `index.php` haya quedado en la raíz de `htdocs/`/`public_html/` (no dentro de una subcarpeta).
